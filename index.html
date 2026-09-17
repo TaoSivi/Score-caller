@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Score Caller · แบดมินตัน & เทนนิส</title>
+<style>
+  :root{
+    --bg:#0b1020; --panelA:#1d4ed8; --panelA2:#2563eb; --panelB:#b91c1c; --panelB2:#dc2626;
+    --ink:#f8fafc; --muted:#cbd5e1; --bar:#0f172a; --line:#1e293b; --accent:#22c55e;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg); color:var(--ink); overflow:hidden;
+    font-family:-apple-system,"Segoe UI","Noto Sans Thai","Noto Sans Lao",Roboto,sans-serif;
+    line-height:1.6; user-select:none; -webkit-user-select:none; touch-action:manipulation;
+  }
+  #app{display:flex;flex-direction:column;height:100dvh;}
+
+  /* Header */
+  header{
+    height:54px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 8px;
+    background:var(--bar);border-bottom:1px solid var(--line);position:relative;z-index:20;
+  }
+  .btn{
+    background:#1e293b;color:var(--ink);border:1px solid var(--line);border-radius:12px;
+    height:40px;min-width:40px;padding:0 10px;font-size:18px;display:inline-flex;
+    align-items:center;justify-content:center;gap:6px;cursor:pointer;
+  }
+  .btn:active{transform:scale(.94);}
+  .btn.small{font-size:13px;height:36px;min-width:36px;padding:0 8px;}
+  .grow{flex:1 1 auto;text-align:center;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;}
+  .grow b{color:var(--ink);font-size:14px;}
+
+  /* Main */
+  main{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  @media(orientation:landscape){ main{flex-direction:row;} }
+  .panel{
+    flex:1 1 0;min-height:0;position:relative;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;cursor:pointer;overflow:hidden;
+    background:linear-gradient(160deg,var(--pa),var(--pb));
+  }
+  .panel.a{--pa:var(--panelA);--pb:var(--panelA2);}
+  .panel.b{--pa:var(--panelB);--pb:var(--panelB2);}
+  .panel:active{filter:brightness(1.12);}
+  .panel.flash::after{content:"+1";position:absolute;top:10%;font-size:min(9vw,60px);font-weight:800;opacity:.9;animation:pop .5s ease-out forwards;}
+  @keyframes pop{from{transform:translateY(20px) scale(.6);opacity:.9}to{transform:translateY(-30px) scale(1.2);opacity:0}}
+  .pname{position:absolute;top:12px;left:0;right:0;text-align:center;font-size:clamp(16px,4.5vw,24px);font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px;}
+  .serve{width:14px;height:14px;border-radius:50%;background:#fde047;box-shadow:0 0 10px #fde047;display:none;flex:0 0 auto;}
+  .serve.on{display:inline-block;}
+  .score{font-weight:800;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-2px;
+    font-size:min(42vw,42vh,320px);}
+  @media(orientation:landscape){ .score{font-size:min(24vw,55vh,340px);} }
+  .sub{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-size:clamp(13px,3.4vw,18px);color:rgba(255,255,255,.85);}
+  .tb-tag{position:absolute;top:44%;font-size:14px;background:rgba(0,0,0,.35);padding:2px 10px;border-radius:20px;letter-spacing:1px;}
+
+  /* Toast */
+  #toast{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:30;
+    background:rgba(2,6,23,.9);border:1px solid var(--line);color:var(--ink);
+    padding:8px 18px;border-radius:24px;font-size:16px;font-weight:600;opacity:0;
+    transition:opacity .25s;pointer-events:none;max-width:92vw;text-align:center;}
+  #toast.show{opacity:1;}
+  .btn.on{background:var(--accent);color:#04140a;border-color:var(--accent);}
+  #remoteBadge{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:25;display:none;
+    background:rgba(2,6,23,.92);border:1px solid var(--accent);color:var(--ink);border-radius:20px;
+    padding:6px 16px;font-size:12px;text-align:center;max-width:94vw;line-height:1.45;}
+  #remoteBadge.show{display:block;}
+  #remoteBadge b{color:var(--accent);}
+  #remoteBadge.pulse{animation:rp .4s ease-out;}
+  @keyframes rp{from{transform:translateX(-50%) scale(1.15);border-color:#fde047}to{transform:translateX(-50%) scale(1)}}
+  #remoteDbg{position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:25;display:none;
+    background:rgba(2,6,23,.85);border:1px solid var(--line);color:var(--muted);border-radius:14px;
+    padding:3px 12px;font-size:12px;font-variant-numeric:tabular-nums;}
+  #remoteDbg.show{display:block;}
+  #remoteDbg b{color:var(--accent);}
+  #remoteDbg.bad b{color:#f87171;}
+
+  /* Overlay menu / winner */
+  .overlay{position:fixed;inset:0;z-index:40;background:rgba(2,6,23,.75);
+    display:none;align-items:center;justify-content:center;padding:18px;}
+  .overlay.show{display:flex;}
+  .card{background:var(--bar);border:1px solid var(--line);border-radius:18px;padding:18px;
+    width:100%;max-width:360px;}
+  .card h2{margin:0 0 12px;font-size:20px;}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;}
+  .row label{color:var(--muted);font-size:14px;}
+  .seg{display:inline-flex;background:#1e293b;border-radius:12px;padding:3px;gap:3px;}
+  .seg button{border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:9px;font-size:14px;cursor:pointer;}
+  .seg button.active{background:var(--accent);color:#04140a;font-weight:700;}
+  .card input{background:#0b1224;border:1px solid var(--line);color:var(--ink);border-radius:10px;
+    padding:9px 11px;font-size:16px;width:130px;text-align:center;}
+  .full{width:100%;justify-content:center;margin-top:6px;}
+  .danger{background:#7f1d1d;border-color:#991b1b;}
+  .winner-name{font-size:26px;font-weight:800;margin:6px 0 2px;}
+  .medal{font-size:54px;}
+  .hint{color:var(--muted);font-size:12px;text-align:center;margin-top:12px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <button class="btn" id="sportBtn" title="สลับกีฬา">🏸</button>
+    <button class="btn" id="undoBtn" title="ย้อนกลับ">↶</button>
+    <div class="grow" id="matchInfo">—</div>
+    <button class="btn" id="remoteBtn" title="รีโมทโมง Watch remote">🎮</button>
+    <button class="btn" id="soundBtn" title="เสียง">🔊</button>
+    <button class="btn small" id="langBtn" title="ภาษาเสียง">TH+EN</button>
+    <button class="btn" id="menuBtn" title="เมนู">⋮</button>
+  </header>
+  <main>
+    <div class="panel a" id="panelA" data-side="a">
+      <div class="pname"><span class="serve" id="serveA"></span><span id="nameA">A</span></div>
+      <div class="tb-tag" id="tbA" style="display:none">TIE-BREAK</div>
+      <div class="score" id="scoreA">0</div>
+      <div class="sub" id="subA"></div>
+    </div>
+    <div class="panel b" id="panelB" data-side="b">
+      <div class="pname"><span class="serve" id="serveB"></span><span id="nameB">B</span></div>
+      <div class="tb-tag" id="tbB" style="display:none">TIE-BREAK</div>
+      <div class="score" id="scoreB">0</div>
+      <div class="sub" id="subB"></div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+<div id="remoteBadge"></div>
+<div id="remoteDbg"></div>
+
+<!-- Settings menu -->
+<div class="overlay" id="menu">
+  <div class="card">
+    <h2>ตั้งค่า / Settings</h2>
+    <div class="row"><label>กีฬา Sport</label>
+      <div class="seg" id="segSport">
+        <button data-v="badminton">🏸 แบด</button>
+        <button data-v="tennis">🎾 เทนนิส</button>
+      </div>
+    </div>
+    <div class="row"><label>ภาษาเสียง Voice</label>
+      <div class="seg" id="segLang">
+        <button data-v="th">ไทย</button>
+        <button data-v="en">EN</button>
+        <button data-v="both">ไทย+EN</button>
+      </div>
+    </div>
+    <div class="row"><label>ชื่อ A</label><input id="inNameA" maxlength="14"></div>
+    <div class="row"><label>ชื่อ B</label><input id="inNameB" maxlength="14"></div>
+    <div class="row"><label>ผู้เสิร์ฟเริ่มต้น Serve</label>
+      <div class="seg" id="segServe">
+        <button data-v="a">A</button>
+        <button data-v="b">B</button>
+      </div>
+    </div>
+    <div class="row"><label>🎮 รีโมทโมง<br>Watch remote</label>
+      <div class="seg" id="segRemote">
+        <button data-v="on">เปิด On</button>
+        <button data-v="off">ปิด Off</button>
+      </div>
+    </div>
+    <div class="hint" style="text-align:left;margin:0 0 8px">เปิดโหมดออกกำลังกายในโมง → หน้าควบคุมเพลง<br>⏮ กลับเพลง = ทีม<b>ซ้าย</b> · ⏭ เน็กเพลง = ทีม<b>ขวา</b><br>⏯ เล่น/หยุด = <b>ย้อนกลับ</b> (กด 2 ครั้ง = เริ่มใหม่)<br>อย่าเปิดเพลง/วิดีโอแอปอื่นพร้อมกัน · หมุนจอแนวนอน</div>
+    <button class="btn full" id="swapBtn">⇄ สลับข้าง Swap sides</button>
+    <button class="btn full" id="testVoice">🔊 ทดสอบเสียง Test voice</button>
+    <button class="btn full danger" id="resetBtn">⟲ เริ่มแมตช์ใหม่ New match</button>
+    <button class="btn full" id="closeMenu">ปิด Close</button>
+    <div class="hint">แตะฝั่งซ้าย/ขวา = บวกแต้ม · ↶ = ย้อนกลับ<br>Tap a side to add a point · works offline</div>
+  </div>
+</div>
+
+<!-- Winner -->
+<div class="overlay" id="winOverlay">
+  <div class="card" style="text-align:center">
+    <div class="medal">🏆</div>
+    <div>ผู้ชนะ Winner</div>
+    <div class="winner-name" id="winName">—</div>
+    <div id="winScore" style="color:var(--muted);margin-bottom:10px"></div>
+    <button class="btn full" id="rematchBtn">🔁 แข่งใหม่ Rematch</button>
+    <button class="btn full" id="winClose">ปิด Close</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ---------- Number words ---------- */
+const EN_ONES=["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+function enNum(n){ if(n<20) return EN_ONES[n]; const t=Math.floor(n/10),o=n%10; const tw={2:"twenty",3:"thirty",4:"forty"}[t]||""; return o? tw+"-"+EN_ONES[o] : tw; }
+const TH_ONES=["ศูนย์","หนึ่ง","สอง","สาม","สี่","ห้า","หก","เจ็ด","แปด","เก้า"];
+function thNum(n){ if(n<10) return TH_ONES[n]; if(n===10) return "สิบ"; const t=Math.floor(n/10),o=n%10; const tw= t===1?"สิบ": t===2?"ยี่สิบ": TH_ONES[t]+"สิบ"; const ow= o===0?"": o===1?"เอ็ด": TH_ONES[o]; return tw+ow; }
+const EN_PT=["love","fifteen","thirty","forty"];
+const TH_PT=["ศูนย์","สิบห้า","สามสิบ","สี่สิบ"];
+
+/* ---------- State ---------- */
+let S=null;
+function newState(sport){
+  return { sport, server:"a", over:false, winner:null, lastEvent:"", gamePointSide:null,
+    a:{p:0,g:0,s:0}, b:{p:0,g:0,s:0}, tiebreak:false };
+}
+let cfg={ sport:"badminton", lang:"both", muted:false, nameA:"A", nameB:"B", firstServe:"a" };
+let history=[];
+
+function snap(){ history.push(JSON.stringify(S)); if(history.length>200) history.shift(); }
+function other(side){ return side==="a"?"b":"a"; }
+
+/* ---------- Scoring engines (pure over S) ---------- */
+function scoreBadminton(side){
+  const me=S[side], op=S[other(side)];
+  me.p++; S.server=side; S.gamePointSide=null;
+  const win = (me.p>=21 && me.p-op.p>=2) || me.p===30;
+  if(win){
+    me.g++;
+    if(me.g>=2){ S.over=true; S.winner=side; S.lastEvent="match"; }
+    else{ S.lastEvent="game"; me.p=0; op.p=0; S.server=side; }
+  } else {
+    S.lastEvent="point";
+    ["a","b"].forEach(s=>{ const m=S[s],o=S[other(s)];
+      if((m.p>=20 && m.p-o.p>=1 && ((m.p+1>=21 && m.p+1-o.p>=2)||m.p+1===30))) S.gamePointSide=s; });
+  }
+}
+function scoreTennis(side){
+  const me=S[side], op=S[other(side)];
+  S.gamePointSide=null;
+  if(S.tiebreak){
+    me.p++;
+    if(me.p>=7 && me.p-op.p>=2){ tennisSetWon(side,true); }
+    else S.lastEvent="point";
+    return;
+  }
+  me.p++;
+  if(me.p>=4 && me.p-op.p>=2){ tennisGameWon(side); }
+  else S.lastEvent="point";
+}
+function tennisGameWon(side){
+  const me=S[side], op=S[other(side)];
+  me.g++; me.p=0; op.p=0; S.server=other(S.server);
+  if(me.g>=6 && me.g-op.g>=2){ tennisSetWon(side,false); }
+  else if(me.g===6 && op.g===6){ S.tiebreak=true; S.lastEvent="tiebreak"; }
+  else S.lastEvent="game";
+}
+function tennisSetWon(side){
+  const me=S[side], op=S[other(side)];
+  me.s++;
+  S.lastGamesA=S.a.g; S.lastGamesB=S.b.g; // remember set score for toast
+  if(S.tiebreak){ // 7-6 style
+    if(side==="a"){S.lastGamesA=7;S.lastGamesB=6;} else {S.lastGamesA=6;S.lastGamesB=7;}
+  }
+  me.g=0; op.g=0; me.p=0; op.p=0; S.tiebreak=false;
+  if(me.s>=2){ S.over=true; S.winner=side; S.lastEvent="match"; }
+  else S.lastEvent="set";
+}
+
+function doScore(side){
+  if(S.over) return;
+  snap();
+  if(S.sport==="badminton") scoreBadminton(side); else scoreTennis(side);
+}
+
+/* ---------- Announcement ---------- */
+function name(side){ return side==="a"?cfg.nameA:cfg.nameB; }
+function badPointWords(){
+  const s=S.server, sS=S[s].p, rS=S[other(s)].p;
+  let en=enNum(sS)+", "+enNum(rS), th=thNum(sS)+" "+thNum(rS);
+  if(S.gamePointSide){ en+=", game point"; th+=" เกมพอยต์"; }
+  return {en,th, toast:sS+" – "+rS};
+}
+function tennisWords(){
+  const s=S.server, o=other(s);
+  if(S.tiebreak){ const sS=S[s].p,rS=S[o].p; return {en:enNum(sS)+", "+enNum(rS),th:thNum(sS)+" "+thNum(rS),toast:"TB "+S.a.p+" – "+S.b.p}; }
+  const sp=S[s].p, rp=S[o].p;
+  if(sp>=3 && rp>=3){
+    if(sp===rp) return {en:"deuce",th:"ดิวซ์",toast:"Deuce"};
+    const lead = sp>rp ? s : o;
+    return {en:"advantage "+name(lead), th:"ได้เปรียบ "+name(lead), toast:"Adv "+name(lead)};
+  }
+  if(sp===rp) return {en:EN_PT[sp]+" all", th:TH_PT[sp]+" เท่ากัน", toast:disp(S.a.p)+" – "+disp(S.b.p)};
+  return {en:EN_PT[sp]+", "+EN_PT[rp], th:TH_PT[sp]+" "+TH_PT[rp], toast:disp(S.a.p)+" – "+disp(S.b.p)};
+}
+function disp(p){ return ["0","15","30","40"][Math.min(p,3)]; }
+function buildAnnounce(){
+  const sp=S.sport, ev=S.lastEvent, w=S.winner;
+  if(ev==="match"){ return {en:sp==="tennis"?"Game, set and match. "+name(w):name(w)+" wins the match.", th:name(w)+" ชนะการแข่งขัน", toast:"🏆 "+name(w)}; }
+  if(sp==="badminton"){
+    if(ev==="game") return {en:name(lastScorer())+" wins the game.", th:name(lastScorer())+" ชนะเกม", toast:"Game · "+name(lastScorer())};
+    return badPointWords();
+  } else {
+    if(ev==="tiebreak") return {en:"Six all, tie-break.", th:"หกเท่ากัน ไทเบรก", toast:"6–6 Tie-break"};
+    if(ev==="game") return {en:"Game, "+name(lastScorer())+".", th:"เกม "+name(lastScorer()), toast:"Game · "+name(lastScorer())};
+    if(ev==="set") return {en:"Game and set, "+name(lastScorer())+".", th:"ได้เซ็ต "+name(lastScorer()), toast:"Set · "+name(lastScorer())};
+    return tennisWords();
+  }
+}
+// who scored last (for game/set events, server points to last scorer's side after badminton game; for tennis server toggled, so use winner-of-game heuristic)
+let _lastScorer="a";
+function lastScorer(){ return _lastScorer; }
+
+/* ---------- Voice ---------- */
+let voices=[];
+function loadVoices(){ try{ voices=speechSynthesis.getVoices()||[]; }catch(e){ voices=[]; } }
+if("speechSynthesis" in window){ loadVoices(); speechSynthesis.onvoiceschanged=loadVoices; }
+function pickVoice(pref){ // 'th' or 'en'
+  const want = pref==="th" ? ["th"] : ["en"];
+  for(const w of want){ const v=voices.find(v=>v.lang&&v.lang.toLowerCase().startsWith(w)); if(v) return v; }
+  return null;
+}
+function speak(obj){
+  if(cfg.muted || !("speechSynthesis" in window)) return;
+  try{ speechSynthesis.cancel(); }catch(e){}
+  const parts=[];
+  if(cfg.lang==="th"||cfg.lang==="both") parts.push(["th",obj.th]);
+  if(cfg.lang==="en"||cfg.lang==="both") parts.push(["en",obj.en]);
+  parts.forEach(([lg,txt])=>{
+    if(!txt) return;
+    const u=new SpeechSynthesisUtterance(txt);
+    u.lang = lg==="th" ? "th-TH" : "en-US";
+    const v=pickVoice(lg); if(v) u.voice=v;
+    u.rate=1; u.pitch=1;
+    try{ speechSynthesis.speak(u); }catch(e){}
+  });
+}
+
+/* ---------- Render ---------- */
+const $=id=>document.getElementById(id);
+function render(){
+  $("nameA").textContent=cfg.nameA; $("nameB").textContent=cfg.nameB;
+  $("sportBtn").textContent = S.sport==="badminton"?"🏸":"🎾";
+  // scores
+  if(S.sport==="badminton"){
+    $("scoreA").textContent=S.a.p; $("scoreB").textContent=S.b.p;
+    $("subA").textContent="เกม Games: "+S.a.g; $("subB").textContent="เกม Games: "+S.b.g;
+    $("tbA").style.display=$("tbB").style.display="none";
+    $("matchInfo").innerHTML="🏸 Best of 3 · เกม <b>"+S.a.g+"–"+S.b.g+"</b>";
+  } else {
+    if(S.tiebreak){
+      $("scoreA").textContent=S.a.p; $("scoreB").textContent=S.b.p;
+      $("tbA").style.display=$("tbB").style.display="block";
+    } else {
+      $("scoreA").textContent=tDisp("a"); $("scoreB").textContent=tDisp("b");
+      $("tbA").style.display=$("tbB").style.display="none";
+    }
+    $("subA").textContent="เกม "+S.a.g+" · เซ็ต "+S.a.s;
+    $("subB").textContent="เกม "+S.b.g+" · เซ็ต "+S.b.s;
+    $("matchInfo").innerHTML="🎾 เซ็ต <b>"+S.a.s+"–"+S.b.s+"</b> · เกม <b>"+S.a.g+"–"+S.b.g+"</b>"+(S.tiebreak?" · TB":"");
+  }
+  $("serveA").className="serve"+(S.server==="a"?" on":"");
+  $("serveB").className="serve"+(S.server==="b"?" on":"");
+  $("soundBtn").textContent=cfg.muted?"🔇":"🔊";
+  $("langBtn").textContent = cfg.lang==="both"?"TH+EN": cfg.lang==="th"?"TH":"EN";
+}
+function tDisp(side){
+  const me=S[side], op=S[other(side)];
+  if(me.p>=3 && op.p>=3){ if(me.p===op.p) return "40"; return me.p>op.p?"AD":"40"; }
+  return disp(me.p);
+}
+function toast(t){ const el=$("toast"); el.textContent=t; el.classList.add("show"); clearTimeout(toast._t); toast._t=setTimeout(()=>el.classList.remove("show"),1600); }
+function flash(side){ const p=$(side==="a"?"panelA":"panelB"); p.classList.remove("flash"); void p.offsetWidth; p.classList.add("flash"); }
+
+/* ---------- Actions ---------- */
+function tap(side){
+  if(S.over) return;
+  _lastScorer=side;
+  doScore(side);
+  render();
+  if(navigator.vibrate) try{ navigator.vibrate(30); }catch(e){}
+  flash(side);
+  const a=buildAnnounce();
+  if(a && a.toast) toast(a.toast);
+  if(a && (a.en||a.th)) speak(a);
+  if(S.over) showWinner();
+}
+function showWinner(){
+  $("winName").textContent=name(S.winner);
+  let sc="";
+  if(S.sport==="badminton") sc="เกม "+S.a.g+" – "+S.b.g;
+  else sc="เซ็ต "+S.a.s+" – "+S.b.s;
+  $("winScore").textContent=sc;
+  $("winOverlay").classList.add("show");
+}
+function undo(){ if(!history.length) return; S=JSON.parse(history.pop()); $("winOverlay").classList.remove("show"); render(); toast("↶ undo"); }
+function resetMatch(keepSport){
+  S=newState(cfg.sport); S.server=cfg.firstServe; history=[];
+  $("winOverlay").classList.remove("show"); render();
+}
+
+/* ---------- Watch remote (Media Session) ---------- */
+let remoteAudio=null, remoteOn=false;
+function silentWavURL(sec){
+  const rate=8000, n=Math.floor(rate*sec), buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+  const ws=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  ws(0,"RIFF"); v.setUint32(4,36+n*2,true); ws(8,"WAVE"); ws(12,"fmt "); v.setUint32(16,16,true);
+  v.setUint16(20,1,true); v.setUint16(22,1,true); v.setUint32(24,rate,true); v.setUint32(28,rate*2,true);
+  v.setUint16(32,2,true); v.setUint16(34,16,true); ws(36,"data"); v.setUint32(40,n*2,true);
+  // soft 200Hz tone (40 samples/period, seamless loop) so the OS treats it as REAL
+  // audio playback and binds the watch's media controls. Amplitude must clear Chrome's
+  // "audible" gate or no media notification appears. Volume is scaled down at playback.
+  for(let i=0;i<n;i++){ v.setInt16(44+i*2, Math.round(6000*Math.sin(2*Math.PI*200*i/rate)), true); }
+  return URL.createObjectURL(new Blob([buf],{type:"audio/wav"}));
+}
+function makeArtwork(){
+  try{
+    const c=document.createElement("canvas"); c.width=c.height=256; const g=c.getContext("2d");
+    g.fillStyle="#1d4ed8"; g.fillRect(0,0,128,256); g.fillStyle="#b91c1c"; g.fillRect(128,0,128,256);
+    g.fillStyle="#fff"; g.textAlign="center"; g.textBaseline="middle";
+    g.font="bold 90px sans-serif"; g.fillText("VS",128,120);
+    g.font="64px sans-serif"; g.fillText("🏸",64,200); g.fillText("🎾",192,200);
+    return [{src:c.toDataURL("image/png"),sizes:"256x256",type:"image/png"}];
+  }catch(e){ return []; }
+}
+function setupRemoteAudio(){
+  if(remoteAudio) return;
+  // 30s (not 1s): Chrome only shows a media-control notification for media it considers
+  // "long enough" — a 1s loop is treated as a sound effect and gets no notification,
+  // so Mi Fitness / the watch never see it.
+  remoteAudio=new Audio(); remoteAudio.src=silentWavURL(30); remoteAudio.loop=true; remoteAudio.volume=1;
+  remoteAudio.addEventListener("pause",()=>{ if(remoteOn) remoteAudio.play().catch(()=>{}); });
+}
+async function enableRemote(){
+  setupRemoteAudio();
+  try{ await remoteAudio.play(); }
+  catch(e){ toast("⚠️ แตะหน้าจอก่อน แล้วเปิดใหม่"); return; }
+  remoteOn=true;
+  if("mediaSession" in navigator){
+    try{ navigator.mediaSession.metadata=new MediaMetadata({title:"Score Caller — นับแต้ม",artist:"⏮ ซ้าย · ⏭ ขวา · ⏯ ย้อน",artwork:makeArtwork()}); }catch(e){}
+    navigator.mediaSession.playbackState="playing";
+    const H=(a,fn)=>{ try{ navigator.mediaSession.setActionHandler(a,fn); }catch(e){} };
+    H("previoustrack",()=>remoteTap("a"));
+    H("nexttrack",()=>remoteTap("b"));
+    H("play",()=>onMiddlePress());
+    H("pause",()=>onMiddlePress());
+  }
+  keepAwake();
+  updateRemoteUI("พร้อมรับปุ่มจากโมง");
+  startRemoteTick();
+}
+let remoteTick=null;
+function startRemoteTick(){
+  clearInterval(remoteTick);
+  const dbg=$("remoteDbg"); dbg.classList.add("show");
+  let last=-1;
+  remoteTick=setInterval(()=>{
+    if(!remoteOn || !remoteAudio){ return; }
+    const t=remoteAudio.currentTime||0, playing=!remoteAudio.paused, moving=(t!==last);
+    last=t;
+    const ok = playing && moving;
+    dbg.classList.toggle("bad",!ok);
+    dbg.innerHTML = ok
+      ? "🔊 เสียงเล่นอยู่ <b>▶ "+t.toFixed(1)+"s</b> → เปิดหน้าคุมเพลงบนโมง"
+      : "⚠️ เสียง<b>ไม่เล่น</b> — แตะหน้าจอ 1 ที หรือปิด/เปิด 🎮";
+  },600);
+}
+function stopRemoteTick(){ clearInterval(remoteTick); $("remoteDbg").classList.remove("show"); }
+function disableRemote(){
+  remoteOn=false;
+  stopRemoteTick();
+  if(remoteAudio) try{ remoteAudio.pause(); }catch(e){}
+  if("mediaSession" in navigator){
+    ["previoustrack","nexttrack","play","pause"].forEach(a=>{ try{ navigator.mediaSession.setActionHandler(a,null); }catch(e){} });
+    try{ navigator.mediaSession.playbackState="none"; }catch(e){}
+  }
+  updateRemoteUI();
+}
+function toggleRemote(){ remoteOn?disableRemote():enableRemote(); }
+let midCount=0, midTimer=null;
+function onMiddlePress(){
+  if(remoteAudio) remoteAudio.play().catch(()=>{});           // keep media session alive
+  if("mediaSession" in navigator){ try{ navigator.mediaSession.playbackState="playing"; }catch(e){} }
+  if(!remoteOn) return;
+  midCount++;
+  clearTimeout(midTimer);
+  midTimer=setTimeout(()=>{
+    if(midCount===1){ undo(); updateRemoteUI("⏯ ย้อนกลับ 1 แต้ม",true); }
+    else { resetMatch(); updateRemoteUI("⏯⏯ เริ่มแมตช์ใหม่",true); }
+    midCount=0;
+  }, 550);
+}
+function remoteTap(side){
+  const cmd = side==="a" ? "⏮ กลับเพลง → ทีมซ้าย (<b>"+cfg.nameA+"</b>)" : "⏭ เน็กเพลง → ทีมขวา (<b>"+cfg.nameB+"</b>)";
+  tap(side);
+  updateRemoteUI(cmd,true);
+}
+function updateRemoteUI(msg,pulse){
+  $("remoteBtn").className="btn"+(remoteOn?" on":"");
+  const bd=$("remoteBadge");
+  if(remoteOn){
+    bd.innerHTML="🎮 <b>เปิด</b> · " + (msg||("⏮ ซ้าย("+cfg.nameA+") · ⏯ ย้อน/เริ่มใหม่ · ⏭ ขวา("+cfg.nameB+")"));
+    bd.classList.add("show");
+    if(pulse){ bd.classList.remove("pulse"); void bd.offsetWidth; bd.classList.add("pulse"); }
+  } else { bd.classList.remove("show"); }
+  markSeg("segRemote", remoteOn?"on":"off");
+}
+document.addEventListener("visibilitychange",()=>{ if(remoteOn && !document.hidden) remoteAudio && remoteAudio.play().catch(()=>{}); });
+
+/* ---------- Wire up ---------- */
+$("panelA").addEventListener("click",()=>tap("a"));
+$("panelB").addEventListener("click",()=>tap("b"));
+$("undoBtn").addEventListener("click",undo);
+$("sportBtn").addEventListener("click",()=>{ cfg.sport = cfg.sport==="badminton"?"tennis":"badminton"; resetMatch(); syncMenu(); });
+$("soundBtn").addEventListener("click",()=>{ cfg.muted=!cfg.muted; if(cfg.muted && "speechSynthesis" in window) speechSynthesis.cancel(); render(); save(); });
+$("langBtn").addEventListener("click",()=>{ cfg.lang = cfg.lang==="both"?"th": cfg.lang==="th"?"en":"both"; render(); syncMenu(); save(); });
+$("remoteBtn").addEventListener("click",toggleRemote);
+document.getElementById("segRemote").addEventListener("click",e=>{ const v=e.target.dataset.v; if(!v)return; v==="on"?enableRemote():disableRemote(); });
+$("menuBtn").addEventListener("click",()=>{ syncMenu(); $("menu").classList.add("show"); });
+$("closeMenu").addEventListener("click",()=>$("menu").classList.remove("show"));
+$("menu").addEventListener("click",e=>{ if(e.target.id==="menu") $("menu").classList.remove("show"); });
+$("swapBtn").addEventListener("click",()=>{ [cfg.nameA,cfg.nameB]=[cfg.nameB,cfg.nameA]; const t=S.a;S.a=S.b;S.b=t; S.server=other(S.server); cfg.firstServe=other(cfg.firstServe); render(); syncMenu(); save(); });
+$("resetBtn").addEventListener("click",()=>{ resetMatch(); $("menu").classList.remove("show"); });
+$("testVoice").addEventListener("click",()=>{ speak({en:"fifteen, love. game point.",th:"สิบห้า ศูนย์ เกมพอยต์"}); });
+$("inNameA").addEventListener("input",e=>{ cfg.nameA=e.target.value||"A"; render(); save(); });
+$("inNameB").addEventListener("input",e=>{ cfg.nameB=e.target.value||"B"; render(); save(); });
+$("rematchBtn").addEventListener("click",()=>resetMatch());
+$("winClose").addEventListener("click",()=>$("winOverlay").classList.remove("show"));
+document.getElementById("segSport").addEventListener("click",e=>{ const v=e.target.dataset.v; if(!v)return; cfg.sport=v; resetMatch(); syncMenu(); save(); });
+document.getElementById("segLang").addEventListener("click",e=>{ const v=e.target.dataset.v; if(!v)return; cfg.lang=v; render(); syncMenu(); save(); });
+document.getElementById("segServe").addEventListener("click",e=>{ const v=e.target.dataset.v; if(!v)return; cfg.firstServe=v; S.server=v; render(); syncMenu(); save(); });
+
+function syncMenu(){
+  $("inNameA").value=cfg.nameA; $("inNameB").value=cfg.nameB;
+  markSeg("segSport",cfg.sport); markSeg("segLang",cfg.lang); markSeg("segServe",cfg.firstServe);
+  markSeg("segRemote", remoteOn?"on":"off");
+}
+function markSeg(id,val){ document.querySelectorAll("#"+id+" button").forEach(b=>b.classList.toggle("active",b.dataset.v===val)); }
+
+/* ---------- Persist prefs ---------- */
+function save(){ try{ localStorage.setItem("scoreCallerCfg",JSON.stringify(cfg)); }catch(e){} }
+function load(){ try{ const r=localStorage.getItem("scoreCallerCfg"); if(r) cfg=Object.assign(cfg,JSON.parse(r)); }catch(e){} }
+
+/* keep screen awake if supported */
+async function keepAwake(){ try{ if("wakeLock" in navigator) await navigator.wakeLock.request("screen"); }catch(e){} }
+document.addEventListener("click",keepAwake,{once:true});
+
+load();
+resetMatch();
+syncMenu();
+render();
+</script>
+</body>
+</html>
